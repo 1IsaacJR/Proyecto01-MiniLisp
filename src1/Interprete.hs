@@ -20,15 +20,16 @@ stp (VarV n, env) = Just (lookupEnv n env, env)
 stp (LambdaV p c, env) = Just (ClosureV p c env, env)
 
 -- Operadores aritméticos
-
 -- Suma
+--smallStep (AddV (NumV n) ev@(ExprV _ _)) env            = (AddV (NumV n) (stepStrict ev), env) 
+
 stp (AddV (NumV a) (NumV b), env) = Just (NumV (a + b), env)
-stp (AddV a (NumV b), env) = do
-    (a', env') <- stp (a, env)
-    return (AddV a' (NumV b), env')
 stp (AddV (NumV a) b, env) = do
     (b', env') <- stp (b, env)
     return (AddV (NumV a) b', env')
+stp (AddV a (NumV b), env) = do
+    (a', env') <- stp (a, env)
+    return (AddV a' (NumV b), env')
 stp (AddV a b, env) = do
     (a', env') <- stp (a, env)
     return (AddV a' b, env')
@@ -236,37 +237,37 @@ stp (TailV xs, env) = do
     return (TailV xs', env')
 
 --App
-
+-- Son f no es closure
 stp (AppV f args, env)
-  | not (isValueV f) = do
-      (f', env') <- stp (f, env)
-      return (AppV f' args, env')
-
+    | not (isValueV f) = do
+        (f', env') <- stp (f, env)
+        return (AppV f' args, env')
+-- Revisamos que cada argumento sea un valor sino se reduce con stp
 stp (AppV f args, env)
-  | any (not . isValueV) args = do
-      (args', env') <- stpArgs args env
-      return (AppV f args', env')
+    | any (not . isValueV) args = do
+        (args', env') <- stpArgs args env
+        return (AppV f args', env')
 
-stp (AppV (ClosureV ps body envC) args, _)
-  | length ps == length args
-  , all isValueV args = Just (body, zip ps args ++ envC)
-  
-stp (AppV (ClosureV [f] body env) args, _)
-  | length [f] == length args
-  , all isValueV args =
-      let self = ClosureV [f] body env  -- La función se referencia a sí misma
-          newEnv = zip [f] args ++ [(f, self)] ++ env
-      in Just (body, newEnv)
+-- En el cuerpo del let aplicar puntos estrictos
+stp (AppV st@(ExprV _ _) args, env) = do
+    st' <- stpStrict st
+    return (AppV st' args, env)
 
-
-stp (AppV (ClosureV ["f"] body envC) [arg], _) 
-  | isValueV arg =
-      let recEnv = ("f", ClosureV ["f"] body (("f", ClosureV ["f"] body envC) : envC)) : envC
-      in Just (body, zip ["f"] [arg] ++ recEnv)
-
+--Extender ambiente
+stp (AppV (ClosureV f b envEnv) args, _)
+    | all isValueV args = Just (b, zip f args ++ envEnv)
+-- Son valores ya
 stp (AppV f args, env) | isValueV f && all isValueV args = Nothing
 
+--Puntos estrcitos
+stpStrict :: ASAValues -> Maybe ASAValues
+stpStrict (ExprV e env)
+  | isValueV e = Just e 
+  | otherwise = case stp (e, env) of
+    Just (e', env') -> Just (ExprV e' env')
+    Nothing -> Just (ExprV e env)
 
+--Funcion auxiliar para aplicaciones varidicas
 stpArgs :: [ASAValues] -> Env -> Maybe ([ASAValues], Env)
 stpArgs [] env = Just ([], env)
 stpArgs (x:xs) env

@@ -93,9 +93,11 @@ desugar (LetStarS [] c) = desugar c
 desugar (LetStarS ((x,v):xs) c) =
     App (Lambda [x] (desugar (LetStarS xs c))) [desugar v]
 
+
+--LetRec
 desugar (LetRecS [(f, body)] expr) =
   App (Lambda [f] (desugar expr))
-      [App robustCombinator [Lambda [f] (desugar body)]]
+      [App combinadorY [Lambda [f] (desugar body)]]
 
 
 -- Condicionales
@@ -174,41 +176,15 @@ desugarV (Let binds body) =
         (LambdaV [x] (desugarV (Let xs body)))  -- aplica recursivamente si hay más bindings
         [desugarV e]
 
+--Deteccion de errores
 desugarV x = error $ "Falta caso en desugarV: " ++ show x
 
-
-
-
-robustCombinator :: ASA
-robustCombinator =
+--Combinador Y
+combinadorY :: ASA
+combinadorY =
   Lambda ["f"] $
     Let [("rec", Lambda ["self"] 
           (App (Var "f") 
                [Lambda ["x"] (App (App (Var "self") [Var "self"]) [Var "x"])]))]
         (App (Var "rec") [Var "rec"])
-
-renameVars :: SASA -> String -> String -> SASA
-renameVars (VarS oldName) old new = 
-  if oldName == old then VarS new else VarS oldName
-
-renameVars (AppS f args) old new = 
-  AppS (renameVars f old new) (map (\x -> renameVars x old new) args)
-
-renameVars (LambdaS params body) old new = 
-  if old `elem` params 
-    then LambdaS params body  -- No renombrar dentro de los parámetros
-    else LambdaS params (renameVars body old new)
-
-renameVars (LetS bindings body) old new =
-  LetS (map (\(v,e) -> (v, renameVars e old new)) bindings) 
-       (renameVars body old new)
-
-renameVars (LetRecS bindings body) old new =
-  LetRecS (map (\(v,e) -> 
-                  if v == old 
-                    then (new, renameVars e old new)  -- ¡RENOMBRAR también en los bindings!
-                    else (v, renameVars e old new)) 
-               bindings) 
-          (renameVars body old new)
-
-renameVars other _ _ = other
+    

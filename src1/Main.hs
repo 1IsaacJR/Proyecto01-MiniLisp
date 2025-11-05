@@ -6,12 +6,12 @@ import SASA
 import ASA
 import ASAValues
 import Desugar (desugar, desugarV)
-import Interprete (interp)
+import Interprete (interp,stpStrict)
 import Control.Exception (catch, SomeException)
 
 main :: IO ()
 main = do
-    putStrLn "Introduce una expresión SASA (escribe 'salir' o Ctrl+D para terminar)."
+    putStrLn "Introduce una expresión SASA (escribe 'salir' o Ctrl+C para terminar)."
     loop
 
 loop :: IO ()
@@ -24,12 +24,13 @@ loop = do
         Just input -> do
             procesar input
             loop
-
+            
 getLineSafe :: IO (Maybe String)
 getLineSafe = catch (Just <$> getLine) handleEOF
   where
     handleEOF :: SomeException -> IO (Maybe String)
     handleEOF _ = return Nothing
+
 
 procesar :: String -> IO ()
 procesar input = catch (do
@@ -65,3 +66,5 @@ manejarErrores e = do
     putStrLn "\n[Error capturado]"
     print e
     putStrLn ""
+
+
